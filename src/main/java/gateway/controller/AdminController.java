@@ -22,7 +22,10 @@ import model.response.UUIDResponse;
 import util.PiazzaLogger;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Properties;
 
 import javax.servlet.http.HttpServletRequest;
 
@@ -37,11 +40,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -83,8 +88,10 @@ public class AdminController extends PiazzaRestController {
 	private String LOGGER_URL;
 	@Value("${security.url}")
 	private String SECURITY_URL;
-	@Value("${version}")
-	private String VERSION;
+	@Value("${release.url}")
+	private String RELEASE_URL;
+
+	private RestTemplate restTemplate = new RestTemplate();
 
 	/**
 	 * Healthcheck required for all Piazza Core Services
@@ -96,9 +103,35 @@ public class AdminController extends PiazzaRestController {
 		return "Hello, Health Check here for pz-gateway.";
 	}
 
+	/**
+	 * Returns version information for the Piazza System
+	 * 
+	 * @return String
+	 */	
 	@RequestMapping(value = "/version", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
-	public String getVersion() {
-		return "{\"version\":\"" + VERSION + "\"}";
+	public ResponseEntity<?> getVersion(@RequestParam(value = "details", required = false) boolean details) {
+		try {
+			Properties p = new Properties();
+
+			Iterator<Entry<String, JsonNode>> nodeIterator = objectMapper.readTree(restTemplate.getForEntity(RELEASE_URL, String.class).getBody()).fields();
+			
+			while( nodeIterator.hasNext()) {
+				Map.Entry<String, JsonNode> node = nodeIterator.next();
+				
+				if( details ) {
+//					p.put(node.getKey(), node.getValue());					
+				}				
+//				p.put(node.getKey(), node.getValue());
+			}
+
+//			p.put("version", VERSION);
+			
+			return new ResponseEntity<String>(objectMapper.writeValueAsString(p), HttpStatus.OK);
+		} catch (Exception exception) {
+			exception.printStackTrace();
+			return new ResponseEntity<PiazzaResponse>(new ErrorResponse(
+					String.format("Error retrieving Piazza Version: %s", exception.getMessage()), "Gateway"), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
 	}
 
 	/**
