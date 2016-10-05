@@ -43,6 +43,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter
 
 import gateway.auth.PiazzaBasicAuthenticationEntryPoint;
 import gateway.auth.PiazzaBasicAuthenticationProvider;
+import gateway.controller.util.HttpInterceptor;
 import io.swagger.annotations.Api;
 import springfox.documentation.builders.ApiInfoBuilder;
 import springfox.documentation.builders.PathSelectors;
@@ -130,7 +131,7 @@ public class Application extends SpringBootServletInitializer {
 	}
 	
 	@Configuration
-	public class GatewayConfig extends WebMvcConfigurerAdapter {
+	protected static class GatewayConfig extends WebMvcConfigurerAdapter {
 
 		@Autowired
 		HttpInterceptor httpInterceptor;

@@ -1,4 +1,4 @@
-package gateway;
+package gateway.controller.util;
 
 import java.util.Enumeration;
 
@@ -20,20 +20,12 @@ public class HttpInterceptor extends HandlerInterceptorAdapter {
 	// Pre-handler
 	public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
 
-		LOGGER.info("PRE HANDLER TRIGGEREDDDDDDDDDDDD, WHOOO HOOOOOOOO");
+		LOGGER.info("pre-handler triggered, oh yeahhhh...");
 		long startTime = System.currentTimeMillis();
 		request.setAttribute("startTime", startTime);
-		
-		Enumeration<String> headers = request.getHeaderNames();
 
-		boolean httpsRedirect = false;
-		while(headers.hasMoreElements())
-		{
-			String header = headers.nextElement();
-			LOGGER.info("\n----------------------------: " + header);
-		}
-		
-		if (httpsRedirect) {
+		LOGGER.info("\n\n----------------------------request.toString(): " + request.getProtocol() + " -- " + request.getMethod());
+		if (request.getProtocol().contains("HTTP/")) {
 			response.sendRedirect("www.google.com");
 			return false;
 		}
