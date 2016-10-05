@@ -132,7 +132,6 @@ public class Application extends SpringBootServletInitializer {
 	
 	@Configuration
 	protected static class GatewayConfig extends WebMvcConfigurerAdapter {
-
 		@Autowired
 		HttpInterceptor httpInterceptor;
 
