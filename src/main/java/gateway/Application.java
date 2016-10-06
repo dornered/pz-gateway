@@ -134,6 +134,7 @@ public class Application extends SpringBootServletInitializer {
 	}
 
 	@Configuration
+	@Profile({ "secure" })
 	protected static class GatewayConfig extends WebMvcConfigurerAdapter {
 		@Override
 		public void addInterceptors(InterceptorRegistry registry) {
