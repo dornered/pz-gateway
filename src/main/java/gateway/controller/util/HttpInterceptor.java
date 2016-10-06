@@ -21,7 +21,6 @@ import javax.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import org.springframework.web.servlet.ModelAndView;
 import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
 
 /**
@@ -29,30 +28,21 @@ import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
  * 
  * @author Sonny.Saniev
  * 
-  */
+ */
 @Component
 public class HttpInterceptor extends HandlerInterceptorAdapter {
 	private final static Logger LOGGER = LoggerFactory.getLogger(HttpInterceptor.class);
 
-	// Pre handler to intercept http requests and redirect them to https.
+	/**
+	 * Catches HTTP requests and redirects to HTTPS.
+	 */
 	public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-
-		// if request instanceof HttpServletRequest then the request is automatically http. No need to check below.
-		if (!"localhost".equalsIgnoreCase(request.getServerName())) { //"http".equalsIgnoreCase(request.getScheme())
-			
-			String redirect = String.format("https://%s%s%s", request.getServerName(), request.getServerPort(), request.getRequestURI());
-			response.sendRedirect(redirect);
-
+		if (request.getScheme().equals("http")) {
+			String redirectUrl = String.format("%s://%s%s", "https", request.getServerName(), request.getRequestURI());
+			response.sendRedirect(redirectUrl);
+			LOGGER.info(String.format("Redirecting from %s to %s.", request.getRequestURI(), redirectUrl));
 			return false;
 		}
-
 		return true;
-	}
-
-	// Post handler
-	public void postHandle(HttpServletRequest request, HttpServletResponse response, Object handler,
-			ModelAndView modelAndView) throws Exception {
-		LOGGER.info("HANDLER: [" + handler + "]");
-		//TODO: future uses
 	}
 }
