@@ -37,7 +37,8 @@ public class HttpInterceptor extends HandlerInterceptorAdapter {
 	 * Catches HTTP requests and redirects to HTTPS.
 	 */
 	public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
-		if (request.getScheme().equals("http")) {
+
+		if ((request.getScheme().equals("http")) || (request.getHeader("X-Forwarded-Proto").equals("http"))) {
 			String redirectUrl = String.format("%s://%s%s", "https", request.getServerName(), request.getRequestURI());
 			response.sendRedirect(redirectUrl);
 			LOGGER.info(String.format("Redirecting from %s to %s.", request.getRequestURI(), redirectUrl));
