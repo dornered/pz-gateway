@@ -17,6 +17,9 @@ package gateway;
 
 import java.security.Principal;
 
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 import org.apache.http.client.HttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,10 +43,10 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
+import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
 
 import gateway.auth.PiazzaBasicAuthenticationEntryPoint;
 import gateway.auth.PiazzaBasicAuthenticationProvider;
-import gateway.controller.util.HttpInterceptor;
 import io.swagger.annotations.Api;
 import springfox.documentation.builders.ApiInfoBuilder;
 import springfox.documentation.builders.PathSelectors;
@@ -129,15 +132,22 @@ public class Application extends SpringBootServletInitializer {
 					.sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS).and().csrf().disable();
 		}
 	}
-	
+
 	@Configuration
 	protected static class GatewayConfig extends WebMvcConfigurerAdapter {
-		@Autowired
-		HttpInterceptor httpInterceptor;
-
 		@Override
 		public void addInterceptors(InterceptorRegistry registry) {
-			registry.addInterceptor(httpInterceptor);
+			registry.addInterceptor(new HandlerInterceptorAdapter() {
+				@Override
+				public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
+					if ((request.getScheme().equals("http")) || (request.getHeader("X-Forwarded-Proto").equals("http"))) {
+						String redirectUrl = String.format("%s://%s%s", "https", request.getServerName(), request.getRequestURI());
+						response.sendRedirect(redirectUrl);
+						return false;
+					}
+					return true;
+				}
+			});
 		}
 	}
 }
