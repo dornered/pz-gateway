@@ -33,6 +33,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.HttpServerErrorException;
@@ -137,6 +138,41 @@ public class AdminController extends PiazzaRestController {
 		stats.put("Release", RELEASE_URL);
 		// Return
 		return new ResponseEntity<Map<String, Object>>(stats, HttpStatus.OK);
+	}
+
+	@RequestMapping(value = "/bfkey", method = RequestMethod.GET)
+	public ResponseEntity<?> getBFAPIKey(@RequestParam(value = "access_token", required = true) String accessToken) {
+		try {
+			HttpHeaders headers = new HttpHeaders();
+			headers.set("Authorization", accessToken);
+			try {
+				GxResponse gxr = restTemplate.exchange("https://gxisaccess.gxaccess.com/ms_oauth/resources/userprofile/me", HttpMethod.GET,
+					new HttpEntity<String>("parameters", headers), GxResponse.class).getBody();
+
+				// Try to retrieve existing API Key based on uid
+
+				// If APIKey exists, return
+				gxr.setApiKey("alongtestapikeyforbeachfront");
+
+				// If APIKey does not exist, create new user profile with new
+				// APIKey, and return
+
+				return new ResponseEntity<GxResponse>(gxr, HttpStatus.OK);
+
+			} catch (HttpClientErrorException | HttpServerErrorException hee) {
+				// if( hee.getStatusCode().equals(HttpStatus.UNAUTHORIZED)) {
+				// Authorization of AccessToken failed
+				return new ResponseEntity<PiazzaResponse>(gatewayUtil.getErrorResponse(hee.getResponseBodyAsString()),
+						hee.getStatusCode());
+				// }
+			}
+		} catch (Exception exception) {
+			exception.printStackTrace();
+			String error = String.format("Error retrieving UUID: %s", exception.getMessage());
+			LOGGER.error(error);
+			return new ResponseEntity<PiazzaResponse>(new ErrorResponse(error, "Gateway"),
+					HttpStatus.INTERNAL_SERVER_ERROR);
+		}
 	}
 
 	/**
