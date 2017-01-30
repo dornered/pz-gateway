@@ -31,6 +31,7 @@ import javax.management.remote.JMXPrincipal;
 
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.joda.time.DateTime;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.InjectMocks;
@@ -112,6 +113,7 @@ public class JobTests {
 		mockJob.jobType = new RepeatJob("654321");
 		mockJob.progress = new JobProgress(50);
 		mockJob.createdBy = "Test User 2";
+		mockJob.createdOn = new DateTime();
 		mockJob.status = StatusUpdate.STATUS_RUNNING;
 
 		// Mock a user
@@ -224,7 +226,7 @@ public class JobTests {
 		service.getResourceMetadata().availability = "ONLINE";
 		serviceResponse.data = service;
 
-		Mockito.doNothing().when(logger).log(anyString(), anyString());
+		Mockito.doNothing().when(logger).log(anyString(), any());
 		when(serviceController.getService("654321", user)).thenReturn(new ResponseEntity<PiazzaResponse>(serviceResponse, HttpStatus.OK));
 
 		// Test

@@ -26,7 +26,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.stereotype.Component;
 
-import model.response.AuthenticationResponse;
+import model.logger.Severity;
+import model.response.AuthResponse;
 import util.PiazzaLogger;
 
 /**
@@ -51,14 +52,19 @@ public class PiazzaBasicAuthenticationProvider implements AuthenticationProvider
 
 	@Override
 	public Authentication authenticate(Authentication authentication) throws AuthenticationException {
+		ExtendedRequestDetails details = (ExtendedRequestDetails) authentication.getDetails();
 		try {
-			AuthenticationResponse response = userDetails.getAuthenticationDecision(authentication.getName());
-			if (response.getAuthenticated()) {
-				return new UsernamePasswordAuthenticationToken(response.getProfile().getUsername(), null, new ArrayList<>());
+			// Form the AuthN+AuthZ request to pz-idam.
+			AuthResponse response = userDetails.getFullAuthorizationDecision(authentication.getName(), details);
+			if (response.getIsAuthSuccess()) {
+				PiazzaAuthenticationToken authToken = new PiazzaAuthenticationToken(response.getUserProfile().getUsername(), null,
+						new ArrayList<>());
+				authToken.setDistinguishedName(response.getUserProfile().getDistinguishedName());
+				return authToken;
 			}
 		} catch (Exception exception) {
-			String error = String.format("Error retrieving UUID: %s.", exception.getMessage());
-			logger.log(error, PiazzaLogger.ERROR);
+			String error = String.format("Error retrieving Api Key: %s.", exception.getMessage());
+			logger.log(error, Severity.ERROR);
 			LOGGER.error(error, exception);
 		}
 		return null;

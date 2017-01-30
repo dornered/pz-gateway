@@ -32,6 +32,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
@@ -45,11 +46,14 @@ import com.amazonaws.services.s3.model.ObjectMetadata;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import exception.PiazzaJobException;
+import gateway.auth.PiazzaAuthenticationToken;
 import messaging.job.KafkaClientFactory;
 import model.data.FileRepresentation;
 import model.data.location.FileLocation;
 import model.data.location.S3FileStore;
 import model.job.type.IngestJob;
+import model.logger.AuditElement;
+import model.logger.Severity;
 import model.request.PiazzaJobRequest;
 import model.response.ErrorResponse;
 import model.response.JobResponse;
@@ -71,7 +75,7 @@ public class GatewayUtil {
 	@Autowired
 	private UUIDFactory uuidFactory;
 	@Autowired
-	PiazzaLogger logger;
+	private PiazzaLogger logger;
 	@Autowired
 	private RestTemplate restTemplate;
 
@@ -100,6 +104,8 @@ public class GatewayUtil {
 	public void init() {
 		// Kafka Producer.
 		producer = KafkaClientFactory.getProducer(KAFKA_ADDRESS.split(":")[0], KAFKA_ADDRESS.split(":")[1]);
+		logger.log("Connecting to Kafka Cluster", Severity.INFORMATIONAL,
+				new AuditElement("gateway", "connectedToKafkaCluster", KAFKA_ADDRESS));
 		// Connect to S3 Bucket. Only apply credentials if they are present.
 		if ((AMAZONS3_ACCESS_KEY.isEmpty()) && (AMAZONS3_PRIVATE_KEY.isEmpty())) {
 			s3Client = new AmazonS3Client();
@@ -132,6 +138,11 @@ public class GatewayUtil {
 			HttpHeaders headers = new HttpHeaders();
 			headers.setContentType(MediaType.APPLICATION_JSON);
 			HttpEntity<PiazzaJobRequest> entity = new HttpEntity<PiazzaJobRequest>(request, headers);
+			// Log this request
+			logger.log(
+					String.format("Forwarding Job %s for user %s with Type %s", jobId, request.createdBy,
+							request.jobType.getClass().getSimpleName()),
+					Severity.INFORMATIONAL, new AuditElement(request.createdBy, "requestJob", jobId));
 			ResponseEntity<PiazzaResponse> jobResponse = restTemplate
 					.postForEntity(String.format("%s/%s?jobId=%s", JOBMANAGER_URL, "requestJob", jobId), entity, PiazzaResponse.class);
 			// Check if the response was an error.
@@ -143,6 +154,9 @@ public class GatewayUtil {
 		} catch (Exception exception) {
 			String error = String.format("Error with Job Manager when Requesting New Piazza Job: %s", exception.getMessage());
 			LOGGER.error(error, exception);
+			// Log the failure
+			logger.log(String.format("Job Request at Gateway failed for Job %s", jobId), Severity.ERROR,
+					new AuditElement(request.createdBy, "failedRequestJob", jobId));
 			throw new PiazzaJobException(error);
 		}
 	}
@@ -187,6 +201,23 @@ public class GatewayUtil {
 	}
 
 	/**
+	 * Gets the Distinguished Name (DN) for a request from the Authentication Token that was returned by the
+	 * Authentication Provider. This assumes the Authentication token is a PiazzaAuthenticationToken as created by the
+	 * PiazzaBasicAuthenticationProvider. If unable to get, returns null.
+	 * 
+	 * @param authentication
+	 *            Authentication Token
+	 * @return DN of the Authentication Token, or null
+	 */
+	public String getDistinguishedName(Authentication authentication) {
+		if (authentication instanceof PiazzaAuthenticationToken) {
+			return ((PiazzaAuthenticationToken) authentication).getDistinguishedName();
+		} else {
+			return null;
+		}
+	}
+
+	/**
 	 * Handles the uploaded file from the data/file endpoint. This will push the file to S3, and then modify the content
 	 * of the job to reference the new S3 location of the file.
 	 * 
@@ -210,7 +241,8 @@ public class GatewayUtil {
 		// Attach the file to the FileLocation object
 		FileLocation fileLocation = new S3FileStore(AMAZONS3_BUCKET_NAME, fileKey, file.getSize(), AMAZONS3_DOMAIN);
 		((FileRepresentation) job.getData().getDataType()).setLocation(fileLocation);
-		logger.log(String.format("S3 File for Job %s Persisted to %s:%s", jobId, AMAZONS3_BUCKET_NAME, fileKey), PiazzaLogger.INFO);
+		logger.log(String.format("S3 File for Job %s Persisted to %s:%s", jobId, AMAZONS3_BUCKET_NAME, fileKey), Severity.INFORMATIONAL,
+				new AuditElement(jobId, "persistS3File", fileKey));
 		return job;
 	}
 
