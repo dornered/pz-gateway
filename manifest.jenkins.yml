@@ -1,7 +1,7 @@
 applications:
 - name: pz-gateway
   host: pz-gateway
-  path: pz-gateway.jar
+  path: 'target/piazza-gateway-1.0.0.jar'
   buildpack: java_buildpack_offline_3_12
   memory: 2048M
   instances: 1
