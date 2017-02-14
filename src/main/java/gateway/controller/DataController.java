@@ -181,8 +181,8 @@ public class DataController extends PiazzaRestController {
 			return new ResponseEntity<PiazzaResponse>(new ErrorResponse(error, "Gateway"), HttpStatus.INTERNAL_SERVER_ERROR);
 		}
 	}
-
-	/**
+	
+ 	/**
 	 * Returns a queried list of Data Resources previously loaded into Piazza that have been loaded by the current user.
 	 * 
 	 * @see http://pz-swagger/#!/Data/get_data

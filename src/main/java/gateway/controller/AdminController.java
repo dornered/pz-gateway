@@ -15,6 +15,7 @@
  **/
 package gateway.controller;
 
+import java.security.Principal;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -30,6 +31,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -40,10 +42,16 @@ import org.springframework.web.client.RestTemplate;
 
 import gateway.controller.util.GatewayUtil;
 import gateway.controller.util.PiazzaRestController;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiResponse;
+import io.swagger.annotations.ApiResponses;
+import model.logger.AuditElement;
 import model.logger.Severity;
 import model.response.ErrorResponse;
 import model.response.PiazzaResponse;
 import model.response.UUIDResponse;
+import model.response.UserProfileResponse;
 import util.PiazzaLogger;
 
 /**
@@ -55,6 +63,7 @@ import util.PiazzaLogger;
  */
 @CrossOrigin(origins = "*", maxAge = 3600)
 @RestController
+@Api
 public class AdminController extends PiazzaRestController {
 	@Autowired
 	private PiazzaLogger logger;
@@ -98,10 +107,12 @@ public class AdminController extends PiazzaRestController {
 	 * @return String
 	 */
 	@RequestMapping(value = "/", method = RequestMethod.GET)
+	@ApiOperation(hidden = true, value = "Health Check")
 	public String getHealthCheck() {
 		return "Hello, Health Check here for pz-gateway.";
 	}
 
+	@ApiOperation(hidden = true, value = "Version")
 	@RequestMapping(value = "/version", method = RequestMethod.GET, produces = MediaType.APPLICATION_JSON_VALUE)
 	public ResponseEntity<?> getVersion() {
 		try {
@@ -118,6 +129,7 @@ public class AdminController extends PiazzaRestController {
 	 * 
 	 * @return Component information
 	 */
+	@ApiOperation(hidden = true, value = "Administrative Statistics")
 	@RequestMapping(value = "/admin/stats", method = RequestMethod.GET)
 	public ResponseEntity<Map<String, Object>> getAdminStats() {
 		Map<String, Object> stats = new HashMap<String, Object>();
@@ -144,6 +156,7 @@ public class AdminController extends PiazzaRestController {
 	 * 
 	 * @return API Key Response information
 	 */
+	@ApiOperation(hidden = true, value = "Legacy API Key Generation")
 	@RequestMapping(value = "/key", method = RequestMethod.GET)
 	public ResponseEntity<PiazzaResponse> getNewApiKeyV1() {
 		return generateNewApiKey();
@@ -154,7 +167,11 @@ public class AdminController extends PiazzaRestController {
 	 * 
 	 * @return API Key Response information
 	 */
+	@ApiOperation(value = "Create new API Key", notes = "Creates a new Piazza API Key based on the Authentication block. This creates a new Key and overrides any previous keys.", tags = "User")
 	@RequestMapping(value = "/v2/key", method = RequestMethod.POST)
+	@ApiResponses(value = { @ApiResponse(code = 200, message = "API Key information.", response = UUIDResponse.class),
+			@ApiResponse(code = 401, message = "Unauthorized", response = ErrorResponse.class),
+			@ApiResponse(code = 500, message = "Internal Error", response = ErrorResponse.class) })
 	public ResponseEntity<PiazzaResponse> getNewApiKeyV2() {
 		return generateNewApiKey();
 	}
@@ -164,13 +181,17 @@ public class AdminController extends PiazzaRestController {
 	 * 
 	 * @return API Key information
 	 */
+	@ApiOperation(value = "Get Current API Key", notes = "Gets the current API Key based on the provided Authentication block. Will not create a new key.", tags = "User")
 	@RequestMapping(value = "/v2/key", method = RequestMethod.GET)
+	@ApiResponses(value = { @ApiResponse(code = 200, message = "API Key information.", response = UUIDResponse.class),
+			@ApiResponse(code = 401, message = "Unauthorized", response = ErrorResponse.class),
+			@ApiResponse(code = 500, message = "Internal Error", response = ErrorResponse.class) })
 	public ResponseEntity<PiazzaResponse> getExistingApiKeyV2() {
 		try {
 			HttpHeaders headers = new HttpHeaders();
 			headers.set("Authorization", request.getHeader("Authorization"));
 			try {
-				return new ResponseEntity<PiazzaResponse>(new RestTemplate().exchange(SECURITY_URL + "/v2/key", HttpMethod.GET,
+				return new ResponseEntity<PiazzaResponse>(restTemplate.exchange(SECURITY_URL + "/v2/key", HttpMethod.GET,
 						new HttpEntity<String>("parameters", headers), UUIDResponse.class).getBody(), HttpStatus.OK);
 			} catch (HttpClientErrorException | HttpServerErrorException hee) {
 				LOGGER.error(hee.getResponseBodyAsString(), hee);
@@ -178,6 +199,43 @@ public class AdminController extends PiazzaRestController {
 			}
 		} catch (Exception exception) {
 			String error = String.format("Error retrieving API Key: %s", exception.getMessage());
+			LOGGER.error(error, exception);
+			logger.log(error, Severity.ERROR);
+			return new ResponseEntity<PiazzaResponse>(new ErrorResponse(error, "Gateway"), HttpStatus.INTERNAL_SERVER_ERROR);
+		}
+	}
+
+	/**
+	 * Gets the User Profile for the current user (extracted from Auth API Key)
+	 * 
+	 * @return User Profile
+	 */
+	@ApiOperation(value = "Get Current User Profile", notes = "Gets the User Profile for the user based on provided API Key from Authentication block.", tags = "User")
+	@RequestMapping(value = "/profile", method = RequestMethod.GET)
+	@ApiResponses(value = { @ApiResponse(code = 200, message = "User Profile information.", response = UserProfileResponse.class),
+			@ApiResponse(code = 401, message = "Unauthorized", response = ErrorResponse.class),
+			@ApiResponse(code = 500, message = "Internal Error", response = ErrorResponse.class) })
+	public ResponseEntity<PiazzaResponse> getUserProfile(Principal user) {
+		try {
+			// Audit Request
+			String username = gatewayUtil.getPrincipalName(user);
+			String dn = gatewayUtil.getDistinguishedName(SecurityContextHolder.getContext().getAuthentication());
+			logger.log(String.format("User %s requested Self User Profile Information.", dn), Severity.INFORMATIONAL,
+					new AuditElement(dn, "requestUserProfile", username));
+			// Broker to IDAM
+			try {
+				ResponseEntity<PiazzaResponse> response = new ResponseEntity<PiazzaResponse>(restTemplate
+						.getForEntity(String.format("%s/%s/%s", SECURITY_URL, "profile", username), UserProfileResponse.class).getBody(),
+						HttpStatus.OK);
+				logger.log(String.format("User %s successfully retrieved User Profile.", username), Severity.INFORMATIONAL,
+						new AuditElement(dn, "successUserProfile", username));
+				return response;
+			} catch (HttpClientErrorException | HttpServerErrorException hee) {
+				LOGGER.error("Error querying User Profile.", hee);
+				return new ResponseEntity<PiazzaResponse>(gatewayUtil.getErrorResponse(hee.getResponseBodyAsString()), hee.getStatusCode());
+			}
+		} catch (Exception exception) {
+			String error = String.format("Error retrieving User Profile : %s", exception.getMessage());
 			LOGGER.error(error, exception);
 			logger.log(error, Severity.ERROR);
 			return new ResponseEntity<PiazzaResponse>(new ErrorResponse(error, "Gateway"), HttpStatus.INTERNAL_SERVER_ERROR);
@@ -194,7 +252,7 @@ public class AdminController extends PiazzaRestController {
 			HttpHeaders headers = new HttpHeaders();
 			headers.set("Authorization", request.getHeader("Authorization"));
 			try {
-				return new ResponseEntity<PiazzaResponse>(new RestTemplate().exchange(SECURITY_URL + "/v2/key", HttpMethod.POST,
+				return new ResponseEntity<PiazzaResponse>(restTemplate.exchange(SECURITY_URL + "/v2/key", HttpMethod.POST,
 						new HttpEntity<String>("parameters", headers), UUIDResponse.class).getBody(), HttpStatus.CREATED);
 			} catch (HttpClientErrorException | HttpServerErrorException hee) {
 				LOGGER.error(hee.getResponseBodyAsString(), hee);

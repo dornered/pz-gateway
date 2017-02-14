@@ -398,8 +398,8 @@ public class ServiceController extends PiazzaRestController {
 			return new ResponseEntity<PiazzaResponse>(new ErrorResponse(error, "Gateway"), HttpStatus.INTERNAL_SERVER_ERROR);
 		}
 	}
-
-	/**
+	
+ 	/**
 	 * Gets the services for the current user.
 	 * 
 	 * @param page
